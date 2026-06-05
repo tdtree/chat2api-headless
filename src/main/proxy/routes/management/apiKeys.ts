@@ -276,4 +276,30 @@ router.post('/api-keys/:id/regenerate', managementAuthMiddleware, async (ctx: Co
   }
 })
 
+/**
+ * POST /v0/management/api-keys/:id/reveal
+ * Reveal full API key value (requires auth)
+ */
+router.post('/api-keys/:id/reveal', managementAuthMiddleware, async (ctx: Context) => {
+  try {
+    const id = ctx.params.id
+    const config = storeManager.getConfig()
+    const apiKeys = config.apiKeys || []
+    const key = apiKeys.find(k => k.id === id)
+
+    if (!key) {
+      ctx.status = 404
+      ctx.body = createErrorResponse('api_key_not_found', `API key not found: ${id}`)
+      return
+    }
+
+    ctx.set('Content-Type', 'application/json')
+    ctx.body = createSuccessResponse({ id: key.id, key: key.key })
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Failed to reveal API key'
+    ctx.status = 500
+    ctx.body = createErrorResponse('internal_error', errorMessage)
+  }
+})
+
 export default router

@@ -62,7 +62,7 @@ export class ProxyServer {
     this.app.use(async (ctx, next) => {
       // Skip paths that don't require authentication
       const publicPaths = ['/', '/health', '/stats']
-      if (publicPaths.includes(ctx.path)) {
+      if (publicPaths.includes(ctx.path) || ctx.path.startsWith('/v1/models')) {
         await next()
         return
       }

@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chat2API 管理面板</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,sans-serif;background:#f5f5f5;color:#333;font-size:14px}
+.header{background:#1a1a2e;color:#fff;padding:12px 24px;display:flex;justify-content:space-between;align-items:center}
+.header h1{font-size:16px}
+.container{max-width:1000px;margin:16px auto;padding:0 12px}
+.card{background:#fff;border-radius:8px;padding:16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card h2{font-size:15px;margin-bottom:10px;color:#1a1a2e;display:flex;justify-content:space-between;align-items:center}
+input,select,textarea,button{font-size:13px;padding:6px 10px;border:1px solid #ddd;border-radius:5px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:#1a1a2e}
+textarea{resize:vertical;font-family:monospace}
+button{cursor:pointer;background:#1a1a2e;color:#fff;border:none;padding:6px 14px}
+button:hover{opacity:.85}
+button.danger{background:#e74c3c}
+button.small{padding:3px 8px;font-size:12px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #eee;font-size:13px}
+th{font-weight:600;color:#555}
+.login-box{max-width:360px;margin:120px auto}
+.login-box .card{text-align:center}
+.login-box input{width:100%;margin:6px 0}
+.login-box button{width:100%;margin-top:6px}
+.hidden{display:none}
+.status{color:#888;font-size:12px}
+.msg{padding:8px 14px;border-radius:5px;margin-bottom:10px;display:none;font-size:13px}
+.msg.success{display:block;background:#d5f5e3;color:#27ae60}
+.msg.error{display:block;background:#fde8e8;color:#e74c3c}
+.tabs{display:flex;gap:2px;margin-bottom:12px;flex-wrap:wrap}
+.tab{padding:8px 16px;background:#e8e8e8;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px}
+.tab.active{background:#1a1a2e;color:#fff}
+.tab-content{display:none}
+.tab-content.active{display:block}
+.flex{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.flex-1{flex:1;min-width:100px}
+.field{margin-bottom:8px}
+.field label{display:block;font-size:12px;font-weight:600;color:#555;margin-bottom:2px}
+.field input,.field select{width:100%}
+.field .help{font-size:11px;color:#999;margin-top:2px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:600px){.grid2{grid-template-columns:1fr}}
+.badge{display:inline-block;padding:1px 6px;border-radius:8px;font-size:11px;font-weight:600}
+.badge.active,.badge.up{background:#d5f5e3;color:#27ae60}
+.badge.inactive,.badge.down{background:#fde8e8;color:#e74c3c}
+.badge.warn{background:#fef9e7;color:#f39c12}
+pre{background:#f8f8f8;padding:8px;border-radius:4px;font-size:12px;max-height:300px;overflow:auto;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>Chat2API 管理面板</h1>
+  <span id="statusBadge" class="status"></span>
+</div>
+
+<div id="loginPage" class="container login-box">
+  <div class="card">
+    <h2>管理密钥</h2>
+    <input type="password" id="secretInput" placeholder="输入管理密钥 (mgmt_xxx)" autofocus>
+    <button onclick="login()">登录</button>
+    <p class="status" style="margin-top:6px" id="loginError"></p>
+  </div>
+</div>
+
+<div id="mainPage" class="container hidden">
+  <div id="msg" class="msg"></div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" onclick="switchTab('dashboard')">仪表盘</div>
+    <div class="tab" onclick="switchTab('accounts')">账号管理</div>
+    <div class="tab" onclick="switchTab('apikeys')">API 密钥</div>
+    <div class="tab" onclick="switchTab('settings')">代理设置</div>
+    <div class="tab" onclick="switchTab('sessions')">会话管理</div>
+    <div class="tab" onclick="switchTab('models')">模型管理</div>
+    <div class="tab" onclick="switchTab('logs')">日志</div>
+  </div>
+
+  <!-- ===== DASHBOARD ===== -->
+  <div id="tab-dashboard" class="tab-content active">
+    <div class="card"><h2>代理状态</h2>
+      <div class="flex" style="gap:16px;flex-wrap:wrap">
+        <div><b>状态:</b> <span id="proxyStatus">-</span></div>
+        <div><b>地址:</b> <span id="proxyAddr">-</span></div>
+        <div><b>运行时间:</b> <span id="proxyUptime">-</span></div>
+        <div><b>请求数:</b> <span id="proxyReqs">-</span></div>
+        <div><b>活跃连接:</b> <span id="proxyConns">-</span></div>
+      </div>
+      <div class="flex" style="margin-top:8px;gap:6px">
+        <button onclick="proxyAction('start')">启动</button>
+        <button class="danger" onclick="proxyAction('stop')">停止</button>
+        <button onclick="proxyAction('restart')">重启</button>
+      </div>
+    </div>
+    <div class="card"><h2>统计</h2>
+      <div class="grid2">
+        <div><b>总请求:</b> <span id="statTotal">0</span></div>
+        <div><b>成功:</b> <span id="statSuccess">0</span></div>
+        <div><b>失败:</b> <span id="statFailed">0</span></div>
+        <div><b>平均延迟:</b> <span id="statLatency">0</span>ms</div>
+      </div>
+    </div>
+    <div class="card"><h2>可用模型 <span id="modelCount" class="status"></span></h2>
+      <div id="modelList" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+    </div>
+  </div>
+
+  <!-- ===== ACCOUNTS ===== -->
+  <div id="tab-accounts" class="tab-content">
+    <div class="card"><h2>添加账号</h2>
+      <div class="field"><label>平台</label>
+        <select id="providerSelect" onchange="onProviderChange()"><option value="">选择平台...</option></select></div>
+      <div class="field"><label>名称</label><input id="accountName" placeholder="如：我的DeepSeek"></div>
+      <div id="credentialFields"></div>
+      <button style="margin-top:8px" onclick="addAccount()">添加账号</button>
+    </div>
+    <div class="card"><h2>账号列表 <span id="accountCount" class="status"></span></h2>
+      <div id="accountList"><p class="status">暂无</p></div>
+    </div>
+  </div>
+
+  <!-- ===== API KEYS ===== -->
+  <div id="tab-apikeys" class="tab-content">
+    <div class="card"><h2>创建 API 密钥</h2>
+      <div class="flex"><input id="newKeyName" placeholder="名称" class="flex-1">
+        <input id="newKeyDesc" placeholder="描述（可选）" class="flex-1">
+        <button onclick="createApiKey()">创建</button></div>
+      <div id="newKeyResult" style="margin-top:6px" class="hidden">
+        <p style="color:#27ae60;font-weight:600">新密钥已创建，请立即保存！</p>
+        <pre id="newKeyValue" style="user-select:all;margin-top:4px"></pre>
+        <button class="small" onclick="copyKey()">复制</button>
+      </div>
+    </div>
+    <div class="card"><h2>API 密钥列表 <span id="keyCount" class="status"></span></h2>
+      <div id="keyList"><p class="status">暂无</p></div>
+    </div>
+  </div>
+
+  <!-- ===== SETTINGS ===== -->
+  <div id="tab-settings" class="tab-content">
+    <div class="card"><h2>代理设置</h2>
+      <div class="field"><label>端口</label><input id="cfgPort" type="number"></div>
+      <div class="field"><label>监听地址</label><input id="cfgHost" placeholder="0.0.0.0"></div>
+      <div class="grid2">
+        <div class="field"><label>负载均衡策略</label>
+          <select id="cfgLB"><option value="round-robin">轮询 (round-robin)</option>
+            <option value="fill-first">优先填满 (fill-first)</option>
+            <option value="failover">故障转移 (failover)</option></select></div>
+        <div class="field"><label>超时 (ms)</label><input id="cfgTimeout" type="number"></div>
+        <div class="field"><label>重试次数</label><input id="cfgRetry" type="number"></div>
+      </div>
+      <h2 style="margin-top:12px">会话设置</h2>
+      <div class="grid2">
+        <div class="field"><label>会话超时 (分钟)</label><input id="cfgSessTimeout" type="number"></div>
+        <div class="field"><label>每会话最大消息数</label><input id="cfgSessMaxMsg" type="number"></div>
+        <div class="field"><label>每账号最大会话数</label><input id="cfgSessMax" type="number"></div>
+        <div class="field"><label>超时后自动删除</label>
+          <select id="cfgSessDel"><option value="true">是</option><option value="false">否</option></select></div>
+      </div>
+      <h2 style="margin-top:12px">上下文管理</h2>
+      <div class="field"><label>启用</label>
+        <select id="cfgCtxEnable"><option value="true">是</option><option value="false">否</option></select></div>
+      <div class="grid2">
+        <div class="field"><label>滑动窗口 - 启用</label>
+          <select id="cfgCtxSW"><option value="true">是</option><option value="false">否</option></select></div>
+        <div class="field"><label>滑动窗口 - 最大消息数</label><input id="cfgCtxSWMsg" type="number"></div>
+        <div class="field"><label>Token限制 - 启用</label>
+          <select id="cfgCtxTL"><option value="true">是</option><option value="false">否</option></select></div>
+        <div class="field"><label>Token限制 - 最大Token</label><input id="cfgCtxTLTok" type="number"></div>
+        <div class="field"><label>摘要 - 启用</label>
+          <select id="cfgCtxSum"><option value="true">是</option><option value="false">否</option></select></div>
+        <div class="field"><label>摘要 - 保留最近消息数</label><input id="cfgCtxSumMsg" type="number"></div>
+      </div>
+      <button style="margin-top:8px" onclick="saveSettings()">保存设置</button>
+    </div>
+  </div>
+
+  <!-- ===== SESSIONS ===== -->
+  <div id="tab-sessions" class="tab-content">
+    <div class="card"><h2>活跃会话 <span id="sessionCount" class="status"></span>
+      <button class="danger small" onclick="clearAllSessions()">清空全部</button></h2>
+      <div id="sessionList"><p class="status">暂无</p></div>
+    </div>
+  </div>
+
+  <!-- ===== MODELS ===== -->
+  <div id="tab-models" class="tab-content">
+    <div class="card"><h2>提供商模型</h2>
+      <div id="providerModels"><p class="status">加载中...</p></div>
+    </div>
+    <div class="card"><h2>添加模型映射</h2>
+      <div class="flex">
+        <input id="mapRequestModel" placeholder="请求模型 (如 gpt-4o)" class="flex-1">
+        <input id="mapActualModel" placeholder="实际模型 (如 deepseek-v4-flash)" class="flex-1">
+        <input id="mapProvider" placeholder="指定提供商 (可选)" class="flex-1" style="max-width:140px">
+        <button onclick="addModelMapping()">添加</button>
+      </div>
+    </div>
+    <div class="card"><h2>模型映射 <span id="mappingCount" class="status"></span>
+      <button class="small" onclick="loadModels()">刷新</button></h2>
+      <div id="mappingList"><p class="status">暂无</p></div>
+    </div>
+  </div>
+
+  <!-- ===== LOGS ===== -->
+  <div id="tab-logs" class="tab-content">
+    <div class="card"><h2>日志
+      <span class="flex" style="gap:4px">
+        <select id="logType" onchange="loadLogs()"><option value="request">请求日志</option><option value="system">系统日志</option></select>
+        <select id="logLevel" onchange="loadLogs()"><option value="">全部级别</option><option value="info">INFO</option><option value="warn">WARN</option><option value="error">ERROR</option></select>
+        <button class="small" onclick="loadLogs()">刷新</button>
+      </span></h2>
+      <div id="logList"><p class="status">暂无日志</p></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PROVIDER_FIELDS = {
+  deepseek:{name:'DeepSeek',fields:[{name:'token',label:'User Token',type:'password',required:true,help:'DevTools → Application → Local Storage → userToken'}]},
+  glm:{name:'GLM',fields:[{name:'refresh_token',label:'Refresh Token',type:'password',required:true,help:'Local Storage → chatglm_refresh_token'}]},
+  kimi:{name:'Kimi',fields:[{name:'token',label:'访问令牌',type:'password',required:true,help:'Cookie 中 kimi-auth 或 JWT Token'}]},
+  minimax:{name:'MiniMax',fields:[{name:'token',label:'JWT Token',type:'password',required:true,help:'格式: realUserID+JWTtoken 或纯JWT'},{name:'realUserID',label:'Real User ID',type:'text',required:false,help:'可选，优先使用此ID'}]},
+  mimo:{name:'Mimo',fields:[{name:'service_token',label:'Service Token',type:'password',required:true,help:'Cookie → serviceToken'},{name:'user_id',label:'User ID',type:'text',required:true,help:'Cookie → userId'},{name:'ph_token',label:'PH Token',type:'password',required:true,help:'Cookie → xiaomichatbot_ph'}]},
+  perplexity:{name:'Perplexity',fields:[{name:'sessionToken',label:'Session Token',type:'password',required:true,help:'Cookie: __Secure-next-auth.session-token'}]},
+  'qwen-ai':{name:'Qwen AI (国际)',fields:[{name:'token',label:'Auth Token',type:'password',required:true,help:'chat.qwen.ai → Local Storage → token'},{name:'cookies',label:'Cookies',type:'textarea',required:false,help:'完整 Cookie 字符串（可选）'}]},
+  qwen:{name:'Qwen (通义千问)',fields:[{name:'ticket',label:'SSO Ticket',type:'password',required:true,help:'Cookie: tongyi_sso_ticket'}]},
+  zai:{name:'Z.ai',fields:[{name:'token',label:'Access Token',type:'password',required:true,help:'Cookie 中 eyJ... JWT'},{name:'captcha_verify_param',label:'Captcha Verify Param',type:'password',required:false,help:'可选，从HAR中获取'}]}
+}
+
+const BASE = '/v0/management'
+let SECRET = ''
+
+function api(path, opts={}) {
+  return fetch(BASE + path, {
+    ...opts,
+    headers:{...opts.headers,'Authorization':'Bearer '+SECRET,'Content-Type':'application/json'}
+  }).then(r=>r.json())
+}
+
+function msg(text, type='success') {
+  const el = document.getElementById('msg')
+  el.textContent = text; el.className = 'msg ' + type
+  setTimeout(()=>el.className='msg', 4000)
+}
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+
+// === LOGIN ===
+function login() {
+  SECRET = document.getElementById('secretInput').value
+  api('/config').then(r=>{
+    if(r.success){
+      document.getElementById('loginPage').classList.add('hidden')
+      document.getElementById('mainPage').classList.remove('hidden')
+      document.getElementById('statusBadge').textContent = '已登录'
+      localStorage.setItem('c2a_secret', SECRET)
+      refreshAll()
+    } else {
+      document.getElementById('loginError').textContent = '密钥错误'
+    }
+  }).catch(e=>{
+    document.getElementById('loginError').textContent = '连接失败: '+e.message
+  })
+}
+const saved = localStorage.getItem('c2a_secret')
+if(saved){document.getElementById('secretInput').value=saved;login()}
+
+function refreshAll(){loadDashboard();loadProviderSelect();loadAccounts();loadApiKeys();loadSettings();loadSessions();loadLogs();loadModels()}
+
+// === TABS ===
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'))
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'))
+  document.querySelector(`.tab[onclick*='${name}']`).classList.add('active')
+  document.getElementById('tab-'+name).classList.add('active')
+  if(name==='dashboard')loadDashboard()
+  if(name==='apikeys')loadApiKeys()
+  if(name==='sessions')loadSessions()
+  if(name==='logs')loadLogs()
+  if(name==='settings')loadSettings()
+  if(name==='models')loadModels()
+}
+
+// === DASHBOARD ===
+function loadDashboard() {
+  api('/proxy/status').then(r=>{
+    if(!r.success)return
+    const d = r.data
+    document.getElementById('proxyStatus').innerHTML = d.isRunning?'<span class="badge up">运行中</span>':'<span class="badge down">已停止</span>'
+    document.getElementById('proxyAddr').textContent = (d.host||'127.0.0.1')+':'+(d.port||6011)
+    document.getElementById('proxyUptime').textContent = d.uptime?Math.floor(d.uptime/1000)+'s':'-'
+    document.getElementById('proxyReqs').textContent = (d.statistics?.totalRequests||r.data?.statistics?.totalRequests||0)
+    document.getElementById('proxyConns').textContent = (d.statistics?.activeConnections||0)
+  })
+  api('/statistics').then(r=>{
+    if(!r.success)return
+    const s = r.data
+    document.getElementById('statTotal').textContent = s.totalRequests||0
+    document.getElementById('statSuccess').textContent = s.successRequests||0
+    document.getElementById('statFailed').textContent = s.failedRequests||0
+    document.getElementById('statLatency').textContent = s.avgLatency?Math.round(s.avgLatency):0
+  })
+}
+function proxyAction(action){
+  api('/proxy/'+action,action!=='stop'?{method:'POST',body:'{}'}:{method:'POST',body:'{}'}).then(r=>{
+    if(r.success)msg('代理已'+{'start':'启动','stop':'停止','restart':'重启'}[action])
+    else msg('操作失败','error')
+    loadDashboard()
+  })
+}
+function loadModels(){
+  api('/providers').then(r=>{
+    if(!r.success)return
+    const providers=r.data||[]
+    let allModels=[]
+    let pmHtml=''
+    providers.forEach(p=>{
+      const models=p.supportedModels||[]
+      allModels=allModels.concat(models)
+      pmHtml+='<div style="margin-bottom:10px;padding:8px;background:#f9f9f9;border-radius:5px">'
+      +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
+      +'<b>'+esc(p.name)+'</b>'
+      +'<span class="badge '+(p.enabled?'active':'inactive')+'">'+(p.enabled?'启用':'禁用')+'</span>'
+      +'<span class="status">'+esc(p.authType||'')+'</span></div>'
+      +'<div style="display:flex;flex-wrap:wrap;gap:3px">'
+      +models.map(m=>'<code style="background:#e8e8e8;padding:2px 6px;border-radius:3px;font-size:12px">'+esc(m)+'</code>').join('')
+      +'</div></div>'
+    })
+    document.getElementById('providerModels').innerHTML=pmHtml||'<p class="status">暂无提供商</p>'
+
+    const badges=Array.from(new Set(allModels)).map(m=>'<code style="background:#1a1a2e;color:#fff;padding:2px 8px;border-radius:10px;font-size:12px">'+esc(m)+'</code>').join('')
+    document.getElementById('modelCount').textContent='('+allModels.length+')'
+    document.getElementById('modelList').innerHTML=badges||'<span class="status">暂无</span>'
+  })
+  api('/model-mappings').then(r=>{
+    if(!r.success)return
+    const mappings=r.data||[]
+    const el=document.getElementById('mappingList')
+    document.getElementById('mappingCount').textContent='('+mappings.length+')'
+    if(!mappings.length){el.innerHTML='<p class="status">暂无映射</p>';return}
+    el.innerHTML='<table><tr><th>请求模型</th><th>实际模型</th><th>指定提供商</th><th>指定账号</th></tr>'
+    +mappings.map(m=>'<tr><td><code>'+esc(m.requestModel)+'</code></td><td>'+esc(m.actualModel||'-')+'</td><td>'+esc(m.preferredProviderId||'-')+'</td><td>'+esc(m.preferredAccountId||'-')+'</td></tr>').join('')
+    +'</table>'
+  })
+}
+function addModelMapping(){
+  const req=document.getElementById('mapRequestModel').value.trim()
+  const act=document.getElementById('mapActualModel').value.trim()
+  if(!req||!act){msg('请填写请求模型和实际模型','error');return}
+  const prov=document.getElementById('mapProvider').value.trim()
+  const body={requestModel:req,actualModel:act}
+  if(prov)body.preferredProviderId=prov
+  api('/model-mappings',{method:'POST',body:JSON.stringify(body)}).then(r=>{
+    if(r.success){msg('映射已添加');loadModels();document.getElementById('mapRequestModel').value='';document.getElementById('mapActualModel').value='';document.getElementById('mapProvider').value=''}
+    else msg('添加失败: '+(r.error?.message||'未知错误'),'error')
+  })
+}
+
+// === ACCOUNTS ===
+function loadProviderSelect(){
+  const sel=document.getElementById('providerSelect')
+  sel.innerHTML='<option value="">选择平台...</option>'
+  for(const[id,p]of Object.entries(PROVIDER_FIELDS)){
+    const cnt=p.fields.filter(f=>f.required).length
+    sel.innerHTML+='<option value="'+id+'">'+p.name+' ('+cnt+'项凭据)</option>'
+  }
+}
+function onProviderChange(){
+  const pid=document.getElementById('providerSelect').value
+  const cont=document.getElementById('credentialFields')
+  cont.innerHTML=''
+  if(!pid||!PROVIDER_FIELDS[pid])return
+  PROVIDER_FIELDS[pid].fields.forEach(f=>{
+    cont.innerHTML+='<div class="field" style="margin-top:6px"><label>'+(f.required?'* ':'')+f.label+'</label>'
+    if(f.type==='textarea') cont.innerHTML+='<textarea id="field_'+f.name+'" rows="2" placeholder="'+esc(f.help)+'"></textarea>'
+    else cont.innerHTML+='<input type="'+f.type+'" id="field_'+f.name+'" placeholder="'+esc(f.help)+'">'
+    if(f.help) cont.innerHTML+='<div class="help">'+esc(f.help)+'</div>'
+    cont.innerHTML+='</div>'
+  })
+}
+function addAccount(){
+  const pid=document.getElementById('providerSelect').value
+  const name=document.getElementById('accountName').value.trim()
+  if(!pid||!name){msg('请选择平台并输入名称','error');return}
+  const pdef=PROVIDER_FIELDS[pid]
+  const cred={};let miss=false
+  pdef.fields.forEach(f=>{
+    const v=document.getElementById('field_'+f.name)?.value.trim()
+    if(f.required&&!v){miss=true;return}
+    if(v) cred[f.name]=v
+  })
+  if(miss){msg('请填写所有必填字段','error');return}
+  api('/accounts',{method:'POST',body:JSON.stringify({providerId:pid,name,credentials:cred})}).then(r=>{
+    if(r.success){msg('✅ 账号添加成功');document.getElementById('accountName').value='';onProviderChange();loadAccounts();loadModels()}
+    else msg('❌ '+(r.error?.message||'失败'),'error')
+  })
+}
+function loadAccounts(){
+  api('/accounts').then(r=>{
+    if(!r.success)return
+    document.getElementById('accountCount').textContent='('+(r.data?.length||0)+')'
+    const el=document.getElementById('accountList')
+    if(!r.data||!r.data.length){el.innerHTML='<p class="status">暂无</p>';return}
+    el.innerHTML='<table><tr><th>名称</th><th>平台</th><th>状态</th><th>操作</th></tr>'
+    r.data.forEach(a=>{
+      el.innerHTML+='<tr><td>'+esc(a.name)+'</td><td>'+esc(a.providerId)+'</td>'
+      +'<td><span class="badge '+(a.status==='active'?'active':'inactive')+'">'+(a.status||'unknown')+'</span></td>'
+      +'<td><button class="danger small" onclick="delAccount(\''+a.id+'\')">删除</button></td></tr>'
+    })
+    el.innerHTML+='</table>'
+  })
+}
+function delAccount(id){
+  if(!confirm('确认删除？'))return
+  api('/accounts/'+id,{method:'DELETE'}).then(r=>{if(r.success){msg('已删除');loadAccounts();loadModels()}else msg('删除失败','error')})
+}
+
+// === API KEYS ===
+function loadApiKeys(){
+  api('/api-keys').then(r=>{
+    if(!r.success)return
+    document.getElementById('keyCount').textContent='('+(r.data?.length||0)+')'
+    const el=document.getElementById('keyList')
+    if(!r.data||!r.data.length){el.innerHTML='<p class="status">暂无</p>';return}
+    el.innerHTML='<table><tr><th>名称</th><th>密钥</th><th>状态</th><th>用量</th><th>操作</th></tr>'
+    r.data.forEach(k=>{
+      el.innerHTML+='<tr><td>'+esc(k.name)+(k.description?'<br><span class="status">'+esc(k.description)+'</span>':'')+'</td>'
+      +'<td style="font-family:monospace;font-size:12px;word-break:break-all;max-width:360px"><code style="word-break:break-all;user-select:all">'+esc(k.key)+'</code>'
+      +' <button class="small" style="padding:1px 6px;font-size:11px;flex-shrink:0" onclick="revealAndCopy(\''+k.id+'\')">复制</button></td>'
+      +'<td><span class="badge '+(k.enabled?'active':'inactive')+'">'+(k.enabled?'启用':'禁用')+'</span></td>'
+      +'<td>'+k.usageCount+'</td>'
+      +'<td><button class="danger small" onclick="delApiKey(\''+k.id+'\')">删除</button></td></tr>'
+    })
+    el.innerHTML+='</table>'
+  })
+}
+function createApiKey(){
+  const name=document.getElementById('newKeyName').value.trim()
+  if(!name){msg('请输入名称','error');return}
+  const desc=document.getElementById('newKeyDesc').value.trim()
+  api('/api-keys',{method:'POST',body:JSON.stringify({name,description:desc||undefined})}).then(r=>{
+    if(r.success){
+      document.getElementById('newKeyResult').classList.remove('hidden')
+      document.getElementById('newKeyValue').textContent = r.data.key
+      document.getElementById('newKeyName').value=''
+      document.getElementById('newKeyDesc').value=''
+      loadApiKeys()
+    } else msg('❌ '+(r.error?.message||'创建失败'),'error')
+  })
+}
+function copyText(t){
+  navigator.clipboard.writeText(t).then(()=>msg('已复制'))
+}
+function copyKey(){
+  const k=document.getElementById('newKeyValue').textContent
+  copyText(k)
+}
+function revealAndCopy(id){
+  api('/api-keys/'+id+'/reveal',{method:'POST',body:'{}'}).then(r=>{
+    if(r.success)copyText(r.data.key)
+    else msg('获取完整密钥失败','error')
+  })
+}
+function delApiKey(id){
+  if(!confirm('确认删除此密钥？'))return
+  api('/api-keys/'+id,{method:'DELETE'}).then(r=>{if(r.success){msg('已删除');loadApiKeys()}else msg('删除失败','error')})
+}
+
+// === SETTINGS ===
+function loadSettings(){
+  api('/config').then(r=>{
+    if(!r.success)return
+    const c=r.data
+    document.getElementById('cfgPort').value=c.proxyPort||8080
+    document.getElementById('cfgHost').value=c.proxyHost||'127.0.0.1'
+    document.getElementById('cfgLB').value=c.loadBalanceStrategy||'round-robin'
+    document.getElementById('cfgTimeout').value=c.requestTimeout||60000
+    document.getElementById('cfgRetry').value=c.retryCount||3
+    if(c.sessionConfig){
+      document.getElementById('cfgSessTimeout').value=c.sessionConfig.sessionTimeout||30
+      document.getElementById('cfgSessMaxMsg').value=c.sessionConfig.maxMessagesPerSession||50
+      document.getElementById('cfgSessMax').value=c.sessionConfig.maxSessionsPerAccount||3
+      document.getElementById('cfgSessDel').value=c.sessionConfig.deleteAfterTimeout?'true':'false'
+    }
+    if(c.contextManagement){
+      document.getElementById('cfgCtxEnable').value=c.contextManagement.enabled?'true':'false'
+      const s=c.contextManagement.strategies||{}
+      if(s.slidingWindow){
+        document.getElementById('cfgCtxSW').value=s.slidingWindow.enabled?'true':'false'
+        document.getElementById('cfgCtxSWMsg').value=s.slidingWindow.maxMessages||20
+      }
+      if(s.tokenLimit){
+        document.getElementById('cfgCtxTL').value=s.tokenLimit.enabled?'true':'false'
+        document.getElementById('cfgCtxTLTok').value=s.tokenLimit.maxTokens||4000
+      }
+      if(s.summary){
+        document.getElementById('cfgCtxSum').value=s.summary.enabled?'true':'false'
+        document.getElementById('cfgCtxSumMsg').value=s.summary.keepRecentMessages||20
+      }
+    }
+  })
+}
+function saveSettings(){
+  const sessionConfig={
+    sessionTimeout:parseInt(document.getElementById('cfgSessTimeout').value)||30,
+    maxMessagesPerSession:parseInt(document.getElementById('cfgSessMaxMsg').value)||50,
+    deleteAfterTimeout:document.getElementById('cfgSessDel').value==='true',
+    maxSessionsPerAccount:parseInt(document.getElementById('cfgSessMax').value)||3
+  }
+  const contextManagement={
+    enabled:document.getElementById('cfgCtxEnable').value==='true',
+    strategies:{
+      slidingWindow:{enabled:document.getElementById('cfgCtxSW').value==='true',maxMessages:parseInt(document.getElementById('cfgCtxSWMsg').value)||20},
+      tokenLimit:{enabled:document.getElementById('cfgCtxTL').value==='true',maxTokens:parseInt(document.getElementById('cfgCtxTLTok').value)||4000},
+      summary:{enabled:document.getElementById('cfgCtxSum').value==='true',keepRecentMessages:parseInt(document.getElementById('cfgCtxSumMsg').value)||20}
+    },
+    executionOrder:['slidingWindow','tokenLimit','summary']
+  }
+  const updates={
+    proxyPort:parseInt(document.getElementById('cfgPort').value)||8080,
+    proxyHost:document.getElementById('cfgHost').value||'127.0.0.1',
+    loadBalanceStrategy:document.getElementById('cfgLB').value,
+    requestTimeout:parseInt(document.getElementById('cfgTimeout').value)||60000,
+    retryCount:parseInt(document.getElementById('cfgRetry').value)||3,
+    sessionConfig,
+    contextManagement
+  }
+  api('/config',{method:'PUT',body:JSON.stringify(updates)}).then(r=>{
+    if(r.success){msg('✅ 设置已保存，重启代理后生效')}
+    else msg('❌ '+(r.error?.message||'保存失败'),'error')
+  })
+}
+
+// === SESSIONS ===
+function loadSessions(){
+  api('/sessions').then(r=>{
+    if(!r.success)return
+    document.getElementById('sessionCount').textContent='('+(r.data?.length||0)+')'
+    const el=document.getElementById('sessionList')
+    if(!r.data||!r.data.length){el.innerHTML='<p class="status">暂无活跃会话</p>';return}
+    el.innerHTML='<table><tr><th>ID</th><th>平台</th><th>模型</th><th>消息数</th><th>状态</th><th>操作</th></tr>'
+    r.data.forEach(s=>{
+      el.innerHTML+='<tr><td style="font-size:11px;font-family:monospace">'+esc(s.id.substring(0,12))+'...</td>'
+      +'<td>'+esc(s.providerId)+'</td>'
+      +'<td>'+esc(s.model||'-')+'</td>'
+      +'<td>'+(s.messages?.length||0)+'</td>'
+      +'<td><span class="badge '+(s.status==='active'?'active':'warn')+'">'+esc(s.status)+'</span></td>'
+      +'<td><button class="danger small" onclick="delSession(\''+s.id+'\')">删除</button></td></tr>'
+    })
+    el.innerHTML+='</table>'
+  })
+}
+function delSession(id){
+  if(!confirm('确认删除此会话？'))return
+  api('/sessions/'+id,{method:'DELETE'}).then(r=>{if(r.success){msg('已删除');loadSessions()}else msg('删除失败','error')})
+}
+function clearAllSessions(){
+  if(!confirm('确认清空所有会话？'))return
+  api('/sessions',{method:'DELETE',body:JSON.stringify({confirm:true})}).then(r=>{if(r.success){msg('已清空');loadSessions()}else msg('操作失败','error')})
+}
+
+// === LOGS ===
+function loadLogs(){
+  const type=document.getElementById('logType').value
+  const level=document.getElementById('logLevel').value
+  let url='/logs?limit=100'
+  if(level) url+='&level='+level
+  if(type==='system') url+='&type=system'
+  api(url).then(r=>{
+    if(!r.success)return
+    const el=document.getElementById('logList')
+    const logs=r.data?.logs||r.data||[]
+    if(!logs.length){el.innerHTML='<p class="status">暂无日志</p>';return}
+    if(type==='system'){
+      el.innerHTML='<table><tr><th>时间</th><th>级别</th><th>消息</th></tr>'
+      logs.forEach(l=>{
+        const time=new Date(l.timestamp).toLocaleString()
+        const lvl=l.level||'info'
+        el.innerHTML+='<tr><td style="white-space:nowrap;font-size:11px">'+time+'</td>'
+        +'<td><span class="badge '+(lvl==='error'?'inactive':lvl==='warn'?'warn':'active')+'">'+lvl+'</span></td>'
+        +'<td>'+esc(l.message||'')+'</td></tr>'
+      })
+      el.innerHTML+='</table>'
+    } else {
+      el.innerHTML='<table><tr><th>时间</th><th>模型</th><th>状态</th><th>延迟</th><th>预览</th></tr>'
+      logs.forEach(l=>{
+        const time=new Date(l.timestamp).toLocaleString()
+        el.innerHTML+='<tr><td style="white-space:nowrap;font-size:11px">'+time+'</td>'
+        +'<td>'+esc(l.model||'-')+'</td>'
+        +'<td><span class="badge '+(l.status==='success'?'active':'inactive')+'">'+esc(l.statusCode||l.status)+'</span></td>'
+        +'<td>'+(l.latency?l.latency+'ms':'-')+'</td>'
+        +'<td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.responsePreview||l.errorMessage||'')+'</td></tr>'
+      })
+      el.innerHTML+='</table>'
+    }
+  })
+}
+
+// auto refresh every 30s on dashboard
+setInterval(()=>{
+  if(!document.getElementById('tab-dashboard').classList.contains('active'))return
+  loadDashboard()
+},30000)
+</script>
+</body>
+</html>
